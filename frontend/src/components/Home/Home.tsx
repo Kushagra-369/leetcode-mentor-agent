@@ -1,11 +1,8 @@
 import { useState } from "react";
 import axios from "axios";
 import { API_URL } from "../../GlobalAPIURL";
-import ProblemInput from "../ProblemInput/ProblemInput";
-import PatternCard from "../PatternCard/PatternCard";
-import HintCard from "../HintCard/HintCard";
-import SimilarProblems from "../SimilarProblems/SimilarProblems";
 
+console.log("API URL:", API_URL);
 interface MentorResponse {
   pattern: string;
   difficulty: string;
@@ -17,10 +14,23 @@ interface MentorResponse {
   similarProblems: string[];
 }
 
+interface CodeReviewResponse {
+  score: number;
+  correctness: string;
+  bugs: string[];
+  optimizations: string[];
+  edgeCases: string[];
+  timeComplexity: string;
+  spaceComplexity: string;
+}
+
 export default function Home() {
   const [problem, setProblem] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [codeLoading, setCodeLoading] = useState(false);
   const [result, setResult] = useState<MentorResponse | null>(null);
+  const [codeResult, setCodeResult] = useState<CodeReviewResponse | null>(null);
   const [showHints, setShowHints] = useState({
     hint1: false,
     hint2: false,
@@ -33,7 +43,8 @@ export default function Home() {
 
     try {
       setLoading(true);
-      const res = await axios.post(`${API_URL}/analyze`, { problem });
+      console.log("API URL:", API_URL);
+      const res = await axios.post(`${API_URL}/analyze-problem`, { problem });
       setResult(res.data.data);
       setShowHints({ hint1: false, hint2: false, hint3: false });
       setShowSimilar(false);
@@ -45,6 +56,26 @@ export default function Home() {
     }
   };
 
+  const reviewCode = async () => {
+    if (!code.trim()) return;
+
+    try {
+      setCodeLoading(true);
+      const payload = {
+        code,
+        pattern: result?.pattern || "",
+        problem: problem || "",
+      };
+      const res = await axios.post(`${API_URL}/review-code`, payload);
+      setCodeResult(res.data.data);
+    } catch (error) {
+      console.log(error);
+      alert("Failed to review code");
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
   const toggleHint = (hintNumber: 1 | 2 | 3) => {
     setShowHints(prev => ({
       ...prev,
@@ -53,113 +84,308 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-black via-gray-900 to-blue-900 text-white p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-linear-to-br from-[#050510] via-[#0a0a2e] to-[#0d1b3e] text-white p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-5xl font-bold bg-linear-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
             AI LeetCode Mentor
           </h1>
           <p className="text-blue-200/80 mt-2 text-lg">
-            Learn patterns, get hints, and solve problems without revealing the complete solution.
+            Analyze problems, get hints, and review your code solutions
           </p>
         </div>
 
-        {/* Input Section */}
-        <ProblemInput
-          problem={problem}
-          setProblem={setProblem}
-          loading={loading}
-          onAnalyze={analyzeProblem}
-        />
-
-        {/* Results */}
-        {result && (
-          <div className="mt-8 space-y-6">
-            {/* Pattern Card - Always Visible */}
-            <PatternCard
-              pattern={result.pattern}
-              difficulty={result.difficulty}
-              explanation={result.explanation}
-              complexity={result.complexity}
-            />
-
-            {/* Hints - Progressive Disclosure */}
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold text-blue-300">💡 Hints</h2>
-              
-              {/* Hint 1 */}
-              <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 overflow-hidden">
-                <button
-                  onClick={() => toggleHint(1)}
-                  className="w-full p-5 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
-                >
-                  <span className="text-lg font-medium">Hint Level 1</span>
-                  <span className="text-2xl">{showHints.hint1 ? '▼' : '▶'}</span>
-                </button>
-                {showHints.hint1 && (
-                  <div className="p-5 pt-0 border-t border-blue-500/20">
-                    <HintCard title="Hint Level 1" hint={result.hint1} />
-                  </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Left Column - Problem Analysis */}
+          <div>
+            {/* Input Section */}
+            <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm p-6 rounded-2xl border border-blue-500/30 shadow-2xl shadow-blue-500/20">
+              <h2 className="text-xl font-semibold mb-3 text-blue-300">📝 Problem Statement</h2>
+              <textarea
+                value={problem}
+                onChange={(e) => setProblem(e.target.value)}
+                placeholder="Paste your LeetCode problem here..."
+                className="w-full h-40 bg-black/50 rounded-lg p-4 outline-none resize-none border border-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-500 text-white"
+              />
+              <button
+                onClick={analyzeProblem}
+                disabled={loading}
+                className={`mt-4 w-full py-3 rounded-lg font-semibold transition-all duration-300 ${loading
+                  ? "bg-gray-700 cursor-not-allowed"
+                  : "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50"
+                  }`}
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Analyzing...
+                  </span>
+                ) : (
+                  "🚀 Analyze Problem"
                 )}
-              </div>
-
-              {/* Hint 2 */}
-              {showHints.hint1 && (
-                <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 overflow-hidden">
-                  <button
-                    onClick={() => toggleHint(2)}
-                    className="w-full p-5 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
-                  >
-                    <span className="text-lg font-medium">Hint Level 2</span>
-                    <span className="text-2xl">{showHints.hint2 ? '▼' : '▶'}</span>
-                  </button>
-                  {showHints.hint2 && (
-                    <div className="p-5 pt-0 border-t border-blue-500/20">
-                      <HintCard title="Hint Level 2" hint={result.hint2} />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Hint 3 */}
-              {showHints.hint2 && (
-                <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 overflow-hidden">
-                  <button
-                    onClick={() => toggleHint(3)}
-                    className="w-full p-5 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
-                  >
-                    <span className="text-lg font-medium">Hint Level 3</span>
-                    <span className="text-2xl">{showHints.hint3 ? '▼' : '▶'}</span>
-                  </button>
-                  {showHints.hint3 && (
-                    <div className="p-5 pt-0 border-t border-blue-500/20">
-                      <HintCard title="Hint Level 3" hint={result.hint3} />
-                    </div>
-                  )}
-                </div>
-              )}
+              </button>
             </div>
 
-            {/* Similar Problems - Show after hints */}
-            {showHints.hint3 && (
-              <div className="mt-6">
-                <button
-                  onClick={() => setShowSimilar(!showSimilar)}
-                  className="w-full p-5 bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
-                >
-                  <span className="text-lg font-medium">📚 Similar Problems</span>
-                  <span className="text-2xl">{showSimilar ? '▼' : '▶'}</span>
-                </button>
-                {showSimilar && (
-                  <div className="mt-4">
-                    <SimilarProblems problems={result.similarProblems} />
+            {/* Results */}
+            {result && (
+              <div className="mt-6 space-y-4">
+                {/* Pattern Card */}
+                <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm p-5 rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10">
+                  <h2 className="text-xl font-semibold mb-3 text-blue-300">🎯 Pattern</h2>
+                  <div className="flex gap-3 flex-wrap mb-3">
+                    <span className="bg-linear-to-r from-blue-500 to-cyan-500 px-4 py-2 rounded-full text-sm font-medium shadow-lg shadow-blue-500/30">
+                      {result.pattern}
+                    </span>
+                    <span className={`px-4 py-2 rounded-full text-sm font-medium shadow-lg ${result.difficulty === "Easy"
+                      ? "bg-linear-to-r from-green-500 to-emerald-500 shadow-green-500/30"
+                      : result.difficulty === "Medium"
+                        ? "bg-linear-to-r from-yellow-500 to-orange-500 shadow-yellow-500/30"
+                        : "bg-linear-to-r from-red-500 to-rose-500 shadow-red-500/30"
+                      }`}>
+                      {result.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-gray-300 leading-relaxed">{result.explanation}</p>
+                  <p className="text-gray-300 mt-2">
+                    <strong className="text-blue-300">Complexity:</strong> {result.complexity}
+                  </p>
+                </div>
+
+                {/* Hints */}
+                <div className="space-y-3">
+                  <h2 className="text-xl font-semibold text-blue-300">💡 Hints</h2>
+
+                  {/* Hint 1 */}
+                  <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 overflow-hidden">
+                    <button
+                      onClick={() => toggleHint(1)}
+                      className="w-full p-4 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
+                    >
+                      <span className="font-medium">Hint Level 1</span>
+                      <span className="text-xl">{showHints.hint1 ? '▼' : '▶'}</span>
+                    </button>
+                    {showHints.hint1 && (
+                      <div className="p-4 pt-0 border-t border-blue-500/20">
+                        <p className="text-gray-300">{result.hint1}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Hint 2 */}
+                  {showHints.hint1 && (
+                    <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 overflow-hidden">
+                      <button
+                        onClick={() => toggleHint(2)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
+                      >
+                        <span className="font-medium">Hint Level 2</span>
+                        <span className="text-xl">{showHints.hint2 ? '▼' : '▶'}</span>
+                      </button>
+                      {showHints.hint2 && (
+                        <div className="p-4 pt-0 border-t border-blue-500/20">
+                          <p className="text-gray-300">{result.hint2}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hint 3 */}
+                  {showHints.hint2 && (
+                    <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 overflow-hidden">
+                      <button
+                        onClick={() => toggleHint(3)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
+                      >
+                        <span className="font-medium">Hint Level 3</span>
+                        <span className="text-xl">{showHints.hint3 ? '▼' : '▶'}</span>
+                      </button>
+                      {showHints.hint3 && (
+                        <div className="p-4 pt-0 border-t border-blue-500/20">
+                          <p className="text-gray-300">{result.hint3}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Similar Problems */}
+                {showHints.hint3 && (
+                  <div>
+                    <button
+                      onClick={() => setShowSimilar(!showSimilar)}
+                      className="w-full p-4 bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 flex items-center justify-between hover:bg-blue-500/10 transition-colors"
+                    >
+                      <span className="font-medium">📚 Similar Problems</span>
+                      <span className="text-xl">{showSimilar ? '▼' : '▶'}</span>
+                    </button>
+                    {showSimilar && (
+                      <div className="mt-3 bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm p-4 rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10">
+                        <ul className="space-y-2">
+                          {result.similarProblems.map((problem, index) => (
+                            <li key={index} className="bg-black/30 p-3 rounded-lg border border-blue-500/20 hover:border-blue-500/50 transition-all text-gray-300">
+                              {problem}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* Quick Code Review Button - Shows after pattern analysis */}
+                <div className="mt-4">
+                  <div className="bg-linear-to-br from-gray-900/90 to-blue-950/90 backdrop-blur-sm p-4 rounded-2xl border border-blue-500/30">
+                    <p className="text-sm text-blue-300 mb-3">
+                      💡 Now paste your solution code in the right panel to get a code review
+                    </p>
+                    <div className="flex items-center gap-3 text-gray-400 text-sm">
+                      <span>📝 Write your code →</span>
+                      <span className="text-blue-400">→</span>
+                      <span className="text-purple-400">Get Review</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
-        )}
+
+          {/* Right Column - Code Review */}
+          <div>
+            {/* Code Input */}
+            <div className="bg-linear-to-br from-gray-900/90 to-purple-950/90 backdrop-blur-sm p-6 rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl font-semibold text-purple-300">💻 Your Code</h2>
+                {result && (
+                  <span className="text-xs bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full">
+                    Context: {result.pattern}
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Paste your code solution here..."
+                className="w-full h-48 bg-black/50 rounded-lg p-4 outline-none resize-none border border-purple-500/30 focus:border-purple-400 transition-all duration-300 placeholder:text-gray-500 text-white font-mono text-sm"
+              />
+              <button
+                onClick={reviewCode}
+                disabled={codeLoading || !code.trim()}
+                className={`mt-4 w-full py-3 rounded-lg font-semibold transition-all duration-300 ${codeLoading || !code.trim()
+                  ? "bg-gray-700 cursor-not-allowed"
+                  : "bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50"
+                  }`}
+              >
+                {codeLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Reviewing...
+                  </span>
+                ) : (
+                  "🔍 Review Code"
+                )}
+              </button>
+              {result && code.trim() && (
+                <p className="text-xs text-green-400 mt-2">
+                  ✅ Reviewing code for {result.pattern} pattern
+                </p>
+              )}
+              {!result && code.trim() && (
+                <p className="text-xs text-yellow-400 mt-2">
+                  ⚡ General code review (no problem context)
+                </p>
+              )}
+            </div>
+
+            {/* Code Review Results */}
+            {codeResult && (
+              <div className="mt-6 space-y-4 animate-fadeIn">
+                {/* Score & Correctness */}
+                <div className="bg-linear-to-br from-gray-900/90 to-purple-950/90 backdrop-blur-sm p-5 rounded-2xl border border-purple-500/30 shadow-lg shadow-purple-500/10">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xl font-semibold text-purple-300">📊 Score</h2>
+                    <span className={`text-3xl font-bold ${codeResult.score >= 8 ? "text-green-400" :
+                      codeResult.score >= 6 ? "text-yellow-400" :
+                        "text-red-400"
+                      }`}>
+                      {codeResult.score}/10
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full transition-all duration-1000 ${codeResult.score >= 8 ? "bg-green-500" :
+                        codeResult.score >= 6 ? "bg-yellow-500" :
+                          "bg-red-500"
+                        }`}
+                      style={{ width: `${codeResult.score * 10}%` }}
+                    />
+                  </div>
+                  <p className="text-gray-300 mt-3">{codeResult.correctness}</p>
+                </div>
+
+                {/* Bugs */}
+                {codeResult.bugs.length > 0 && (
+                  <div className="bg-linear-to-br from-gray-900/90 to-red-950/30 backdrop-blur-sm p-5 rounded-2xl border border-red-500/30 shadow-lg shadow-red-500/10">
+                    <h2 className="text-xl font-semibold mb-3 text-red-300">🐛 Bugs</h2>
+                    <ul className="space-y-2">
+                      {codeResult.bugs.map((bug, index) => (
+                        <li key={index} className="bg-black/30 p-3 rounded-lg border border-red-500/20 text-gray-300">
+                          {bug}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Optimizations */}
+                {codeResult.optimizations.length > 0 && (
+                  <div className="bg-linear-to-br from-gray-900/90 to-blue-950/30 backdrop-blur-sm p-5 rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10">
+                    <h2 className="text-xl font-semibold mb-3 text-blue-300">🚀 Optimizations</h2>
+                    <ul className="space-y-2">
+                      {codeResult.optimizations.map((opt, index) => (
+                        <li key={index} className="bg-black/30 p-3 rounded-lg border border-blue-500/20 text-gray-300">
+                          {opt}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Edge Cases */}
+                {codeResult.edgeCases.length > 0 && (
+                  <div className="bg-linear-to-br from-gray-900/90 to-yellow-950/30 backdrop-blur-sm p-5 rounded-2xl border border-yellow-500/30 shadow-lg shadow-yellow-500/10">
+                    <h2 className="text-xl font-semibold mb-3 text-yellow-300">⚠️ Edge Cases</h2>
+                    <ul className="space-y-2">
+                      {codeResult.edgeCases.map((edge, index) => (
+                        <li key={index} className="bg-black/30 p-3 rounded-lg border border-yellow-500/20 text-gray-300">
+                          {edge}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Complexity */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-linear-to-br from-gray-900/90 to-green-950/30 backdrop-blur-sm p-5 rounded-2xl border border-green-500/30 shadow-lg shadow-green-500/10">
+                    <h2 className="text-sm font-semibold text-green-300 mb-2">⏱️ Time</h2>
+                    <p className="text-gray-300 font-mono text-sm">{codeResult.timeComplexity}</p>
+                  </div>
+                  <div className="bg-linear-to-br from-gray-900/90 to-purple-950/30 backdrop-blur-sm p-5 rounded-2xl border border-purple-500/30 shadow-lg shadow-purple-500/10">
+                    <h2 className="text-sm font-semibold text-purple-300 mb-2">💾 Space</h2>
+                    <p className="text-gray-300 font-mono text-sm">{codeResult.spaceComplexity}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
